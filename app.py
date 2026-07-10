@@ -1,6 +1,8 @@
 import io
 import os
 import uuid
+import hashlib
+import hmac
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
@@ -117,6 +119,152 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+
+
+# ============================================================
+# AUTENTICAÇÃO
+# ============================================================
+
+def gerar_hash_senha(senha: str) -> str:
+    """Gera o hash SHA-256 usado para validar a senha."""
+    return hashlib.sha256(senha.encode("utf-8")).hexdigest()
+
+
+def carregar_usuarios() -> Dict[str, Dict[str, str]]:
+    """
+    Carrega os usuários definidos nos Secrets do Streamlit Cloud.
+
+    Exemplo:
+    [usuarios.admin]
+    nome = "Administrador"
+    senha_hash = "HASH_SHA256"
+    """
+    usuarios: Dict[str, Dict[str, str]] = {}
+
+    try:
+        bloco_usuarios = st.secrets.get("usuarios", {})
+
+        for login, dados in bloco_usuarios.items():
+            usuarios[str(login).strip()] = {
+                "nome": str(dados.get("nome", login)).strip(),
+                "senha_hash": str(dados.get("senha_hash", "")).strip(),
+            }
+    except Exception:
+        pass
+
+    # Fallback somente para teste local.
+    # No Streamlit Cloud, use os usuários definidos em Settings > Secrets.
+    if not usuarios:
+        usuarios = {
+            "admin": {
+                "nome": "Administrador",
+                "senha_hash": gerar_hash_senha("admin123"),
+            }
+        }
+
+    return usuarios
+
+
+def autenticar_usuario(login: str, senha: str) -> Optional[Dict[str, str]]:
+    login_limpo = login.strip()
+    usuario = carregar_usuarios().get(login_limpo)
+
+    if not usuario:
+        return None
+
+    hash_informado = gerar_hash_senha(senha)
+    hash_cadastrado = usuario.get("senha_hash", "")
+
+    if hmac.compare_digest(hash_informado, hash_cadastrado):
+        return {
+            "login": login_limpo,
+            "nome": usuario.get("nome", login_limpo),
+        }
+
+    return None
+
+
+def logout() -> None:
+    st.session_state.pop("usuario_logado", None)
+    st.rerun()
+
+
+def tela_login() -> None:
+    # Esconde a barra lateral enquanto o usuário não estiver autenticado
+    st.markdown(
+        """
+        <style>
+            section[data-testid="stSidebar"] {
+                display: none;
+            }
+
+            .login-box {
+                background: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 18px;
+                padding: 26px;
+                box-shadow: 0 8px 24px rgba(17, 24, 39, 0.08);
+                margin-top: 16px;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+        <div class="aj-header">
+            <h1>🛠️ {EMPRESA}</h1>
+            <p>Acesso restrito ao sistema de gestão de ordens de serviço.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    esquerda, centro, direita = st.columns([1, 1.1, 1])
+
+    with centro:
+        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        st.markdown("### Entrar no sistema")
+
+        with st.form("form_login", clear_on_submit=False):
+            login = st.text_input(
+                "Usuário",
+                placeholder="Digite seu usuário",
+            )
+            senha = st.text_input(
+                "Senha",
+                type="password",
+                placeholder="Digite sua senha",
+            )
+
+            entrar = st.form_submit_button(
+                "🔐 Entrar",
+                type="primary",
+                use_container_width=True,
+            )
+
+        if entrar:
+            if not login.strip() or not senha:
+                st.error("Informe o usuário e a senha.")
+            else:
+                usuario = autenticar_usuario(login, senha)
+
+                if usuario:
+                    st.session_state["usuario_logado"] = usuario
+                    st.rerun()
+                else:
+                    st.error("Usuário ou senha inválidos.")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def exigir_login() -> None:
+    """Bloqueia todo o app até que o login seja validado."""
+    if "usuario_logado" not in st.session_state:
+        tela_login()
+        st.stop()
 
 
 # ============================================================
@@ -1294,9 +1442,20 @@ using (true);
 # NAVEGAÇÃO
 # ============================================================
 
+exigir_login()
+
+
 with st.sidebar:
     st.markdown(f"## 🛠️ {EMPRESA}")
     st.caption("Sistema de assistência técnica")
+
+    usuario_atual = st.session_state.get("usuario_logado", {})
+    st.success(f"👤 {usuario_atual.get('nome', 'Usuário')}")
+
+    if st.button("🚪 Sair", use_container_width=True):
+        logout()
+
+    st.markdown("---")
 
     pagina = st.radio(
         "Menu",
