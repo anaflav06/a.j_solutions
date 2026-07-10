@@ -1,0 +1,31 @@
+# Credenciais e segredos
+.streamlit/secrets.toml
+secrets.toml
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+
+# Streamlit e IDE
+.streamlit/cache/
+.vscode/
+.idea/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos locais e temporários
+*.db
+*.sqlite
+*.sqlite3
+uploads/
+temp/
