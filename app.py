@@ -34,7 +34,7 @@ TABELA_OS = "ordens_servico"
 
 st.set_page_config(
     page_title=f"{EMPRESA} | {TITULO_APP}",
-    page_icon="🛠️",
+    page_icon="icone.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
